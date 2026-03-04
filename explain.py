@@ -1,4 +1,5 @@
-import anthropic
+from google import genai
+from google.genai import types
 import base64
 import json
 import os
@@ -6,9 +7,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-def explain_defect(image_path, defect_class, confidence, location):
-    client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
+def explain_defect(image_path, defect_class, confidence, location):
     with open(image_path, "rb") as f:
         img_data = base64.b64encode(f.read()).decode()
 
@@ -18,7 +19,7 @@ A YOLOv8 vision model detected: {defect_class} defect
 Confidence: {confidence:.1%}
 Location in image: {location}
 
-Analyze this defect and respond ONLY in this exact JSON format:
+Analyze this defect and respond ONLY in this exact JSON format with no extra text:
 {{
   "explanation": "brief description of what this defect looks like",
   "probable_cause": "what likely caused this defect in manufacturing",
@@ -26,22 +27,17 @@ Analyze this defect and respond ONLY in this exact JSON format:
   "severity": "LOW or MEDIUM or HIGH"
 }}"""
 
-    response = client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=500,
-        messages=[{
-            "role": "user",
-            "content": [
-                {"type": "image", "source": {
-                    "type": "base64",
-                    "media_type": "image/jpeg",
-                    "data": img_data
-                }},
-                {"type": "text", "text": prompt}
-            ]
-        }]
+    response = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=[
+            types.Part.from_bytes(
+                data=base64.b64decode(img_data),
+                mime_type="image/jpeg"
+            ),
+            prompt
+        ]
     )
 
-    raw = response.content[0].text
+    raw = response.text
     clean = raw.replace("```json", "").replace("```", "").strip()
     return json.loads(clean)
